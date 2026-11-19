@@ -32,12 +32,17 @@
         }
         .pin-box h2 { margin-bottom: 8px; font-size: 1.4rem; }
         .pin-box p { color: var(--text-muted); font-size: 0.88rem; margin-bottom: 20px; }
+        .pin-input-wrap { position: relative; margin-bottom: 16px; }
         .pin-input {
-            width: 100%; padding: 14px; font-size: 1.2rem; text-align: center; letter-spacing: 4px;
+            width: 100%; padding: 14px 44px 14px 14px; font-size: 1.2rem; text-align: center; letter-spacing: 3px;
             background: #0f172a; border: 1px solid var(--border); border-radius: 12px;
-            color: #fff; margin-bottom: 16px; outline: none;
+            color: #fff; outline: none;
         }
         .pin-input:focus { border-color: var(--primary); }
+        .toggle-pin {
+            position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;
+        }
         .pin-btn {
             width: 100%; padding: 14px; background: var(--primary); color: #fff;
             border: none; border-radius: 12px; font-size: 1rem; font-weight: bold; cursor: pointer;
@@ -133,6 +138,7 @@
             cursor: pointer;
             transition: all 0.2s;
             position: relative;
+            user-select: none;
         }
         .task-btn:hover { border-color: var(--primary); transform: translateY(-2px); }
         .task-btn.done {
@@ -196,7 +202,10 @@
     <div class="pin-box">
         <h2>🔒 Shaxsiy kabinet</h2>
         <p>Ma'lumotlaringizni yuklash va sinxronlash uchun maxfiy PIN-kodni kiriting (noutbuk va telefonda bir xil PIN yozing):</p>
-        <input type="password" id="pinInput" class="pin-input" placeholder="••••••" onkeypress="if(event.key==='Enter') unlockWithPin()">
+        <div class="pin-input-wrap">
+            <input type="password" id="pinInput" class="pin-input" placeholder="••••••" onkeypress="if(event.key==='Enter') unlockWithPin()">
+            <button type="button" class="toggle-pin" onclick="togglePinVisibility()" title="Ko'rsatish">👁️</button>
+        </div>
         <button class="pin-btn" onclick="unlockWithPin()">Kirish</button>
     </div>
 </div>
@@ -290,16 +299,35 @@
         { id: 'electronics', name: 'Elektronika va sxemalar 1', total: 15 }
     ];
 
+    const SUBJECT_MAP = Object.fromEntries(SUBJECTS.map(s => [s.id, s.name]));
     const DEADLINE = new Date('2027-01-16T23:59:59');
     let progressData = JSON.parse(localStorage.getItem('tatu_elms_81')) || {};
     let currentKey = null;
 
-    // PIN-kodni SHA-256 orqali xeshlash
-    async function sha256(message) {
-        const msgBuffer = new TextEncoder().encode("tatu_salt_" + message);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    function togglePinVisibility() {
+        const inp = document.getElementById('pinInput');
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+    }
+
+    // Har qanday brauzerda ishonchli ishlaydigan xesh funksiyasi
+    async function hashPin(message) {
+        const text = "tatu_salt_" + message;
+        if (window.crypto && window.crypto.subtle) {
+            const msgBuffer = new TextEncoder().encode(text);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        } else {
+            // Fallback xesh (agar oddiy http da ochilsa)
+            let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+            for (let i = 0; i < text.length; i++) {
+                const ch = text.charCodeAt(i);
+                h1 = Math.imul(h1 ^ ch, 2654435761);
+                h2 = Math.imul(h2 ^ ch, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16) + "_fallback";
+        }
     }
 
     async function unlockWithPin() {
@@ -308,7 +336,7 @@
             alert("Kamida 4 ta belgidan iborat PIN-kod kiriting!");
             return;
         }
-        secretHash = await sha256(pin);
+        secretHash = await hashPin(pin);
         localStorage.setItem('tatu_elms_pin_hash', secretHash);
         document.getElementById('pinOverlay').style.display = 'none';
         fetchFromFirebase();
@@ -346,7 +374,7 @@
         setSyncStatus("⏳ Yuklanmoqda...", true);
         try {
             const res = await fetch(getDbUrl());
-            if (!res.ok) throw new Error("Ruxsat xatosi");
+            if (!res.ok) throw new Error("Ruxsat xatosi: " + res.status);
             const data = await res.json();
             if (data) {
                 progressData = data;
@@ -373,7 +401,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(progressData)
             });
-            if (!res.ok) throw new Error("Saqlash xatosi");
+            if (!res.ok) throw new Error("Saqlash xatosi: " + res.status);
             setSyncStatus("✅ Himoyalangan & Sinxron");
         } catch (err) {
             console.error(err);
@@ -407,8 +435,9 @@
                     });
                 }
 
+                // Tirnoq muammosi bo'lmasligi uchun faqat sub.id va raqam uzatamiz
                 tasksHtml += `
-                    <div class="task-btn ${item?.done ? 'done' : ''}" onclick="openModal('${key}', '${sub.name}', ${i})">
+                    <div class="task-btn ${item?.done ? 'done' : ''}" onclick="openModal('${sub.id}', ${i})">
                         ${item?.note ? '<span class="task-note-dot" title="Izoh bor"></span>' : ''}
                         <span class="task-num">${i}-modul</span>
                         <span class="task-date">${item?.done ? '✅ ' + formatDisplayDate(item.date) : 'Kutilmoqda'}</span>
@@ -456,9 +485,10 @@
         }
     }
 
-    function openModal(key, subName, num) {
-        currentKey = key;
-        const existing = progressData[key];
+    function openModal(subId, num) {
+        currentKey = `${subId}_${num}`;
+        const subName = SUBJECT_MAP[subId];
+        const existing = progressData[currentKey];
         document.getElementById('modalTitle').innerText = `${subName} (${num}-modul)`;
         document.getElementById('taskDateInput').value = existing?.date || getTodayStr();
         document.getElementById('taskNoteInput').value = existing?.note || '';
@@ -521,7 +551,6 @@
         }
     }
 
-    // Dastlabki tekshiruv
     render();
     if (secretHash) {
         document.getElementById('pinOverlay').style.display = 'none';
