@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TATU ELMS Tracker — M313-25DIo' (№26)</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --card-bg: #1e293b;
+            --card-hover: #283548;
+            --primary: #3b82f6;
+            --accent: #10b981;
+            --warning: #f59e0b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); padding: 20px; line-height: 1.5; }
+        .container { max-width: 1250px; margin: 0 auto; }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+        .user-info h1 { font-size: 1.5rem; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .badge { background: var(--primary); font-size: 0.8rem; padding: 4px 10px; border-radius: 20px; }
+        .user-info p { color: var(--text-muted); font-size: 0.9rem; margin-top: 4px; }
+
+        .stats-box { display: flex; gap: 20px; flex-wrap: wrap; }
+        .stat-item {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            padding: 12px 20px;
+            border-radius: 12px;
+            text-align: center;
+            min-width: 130px;
+        }
+        .stat-val { font-size: 1.4rem; font-weight: bold; color: var(--accent); }
+        .stat-val.warn { color: var(--warning); }
+        .stat-label { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* Progress Bar */
+        .overall-progress {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+        .progress-header { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 600; }
+        .progress-track { width: 100%; height: 14px; background: #0f172a; border-radius: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); width: 0%; transition: width 0.4s ease; }
+
+        /* Controls */
+        .controls { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+        button {
+            background: var(--card-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: 0.2s;
+        }
+        button:hover { background: var(--primary); border-color: var(--primary); }
+        button.danger:hover { background: #ef4444; border-color: #ef4444; }
+
+        /* Main Grid */
+        .main-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+        @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+
+        /* Subjects */
+        .subject-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .subject-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .subject-title { font-size: 1.15rem; font-weight: 600; }
+        .subject-count { font-size: 0.9rem; color: var(--accent); font-weight: bold; }
+
+        .tasks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+            gap: 10px;
+        }
+        .task-btn {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .task-btn:hover { border-color: var(--primary); transform: translateY(-2px); }
+        .task-btn.done {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: var(--accent);
+        }
+        .task-num { font-weight: bold; font-size: 0.95rem; display: block; }
+        .task-date { font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 4px; }
+        .task-btn.done .task-date { color: var(--accent); }
+        .task-note-dot {
+            width: 6px; height: 6px; background: var(--warning); border-radius: 50%;
+            position: absolute; top: 6px; right: 6px;
+        }
+
+        /* History Log */
+        .history-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            height: fit-content;
+            position: sticky;
+            top: 20px;
+        }
+        .history-panel h2 { font-size: 1.15rem; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .log-list { max-height: 600px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .log-item {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 10px;
+            border-left: 3px solid var(--accent);
+            font-size: 0.88rem;
+        }
+        .log-date { font-size: 0.75rem; color: var(--warning); font-weight: bold; }
+        .log-sub { font-weight: 600; color: #fff; margin: 2px 0; }
+        .log-note { color: var(--text-muted); font-size: 0.8rem; font-style: italic; }
+
+        /* Modal */
+        .modal {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+            justify-content: center; align-items: center; z-index: 100;
+        }
+        .modal-content {
+            background: var(--card-bg); padding: 24px; border-radius: 16px;
+            width: 90%; max-width: 400px; border: 1px solid var(--border);
+        }
+        .modal-content h3 { margin-bottom: 15px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; }
+        .form-group input, .form-group textarea {
+            width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+            background: #0f172a; color: #fff; font-size: 0.9rem;
+        }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="user-info">
+            <h1>TATU ELMS Tracker <span class="badge">M313-25DIo' | Variant №26</span></h1>
+            <p>G'ofurov M. • Dasturiy injiniring (2-kurs) • Semestr muddati: 16.01.2027</p>
+        </div>
+        <div class="stats-box">
+            <div class="stat-item">
+                <div class="stat-val" id="completedCount">0 / 81</div>
+                <div class="stat-label">Bajarilgan modul</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-val warn" id="daysLeft">--</div>
+                <div class="stat-label">Qolgan kun</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-val" id="dailyPace">--</div>
+                <div class="stat-label">Kunlik me'yor</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="overall-progress">
+        <div class="progress-header">
+            <span>Umumiy o'zlashtirish darajasi</span>
+            <span id="percentText">0%</span>
+        </div>
+        <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="exportData()">📥 Zaxira nusxa yuklab olish (JSON)</button>
+        <button onclick="document.getElementById('importFile').click()">📤 Zaxira nusxani tiklash</button>
+        <input type="file" id="importFile" style="display:none" accept=".json" onchange="importData(event)">
+        <button class="danger" onclick="resetAll()">🗑️ Barchasini tozalash</button>
+    </div>
+
+    <div class="main-grid">
+        <div id="subjectsContainer"></div>
+
+        <div class="history-panel">
+            <h2>📅 Bajarilgan vazifalar tarixi</h2>
+            <div class="log-list" id="historyLog">
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Hali vazifalar belgilanmagan.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal oyna -->
+<div class="modal" id="taskModal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Vazifa tafsilotlari</h3>
+        <div class="form-group">
+            <label>Bajarilgan sana:</label>
+            <input type="date" id="taskDateInput">
+        </div>
+        <div class="form-group">
+            <label>Izoh (ixtiyoriy, masalan: "ER diagramma chizildi"):</label>
+            <textarea id="taskNoteInput" rows="3" placeholder="Qisqacha eslatma..."></textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="danger" id="unmarkBtn" onclick="unmarkTask()">Bajarilmadi</button>
+            <button onclick="closeModal()">Bekor qilish</button>
+            <button style="background: var(--accent); border-color: var(--accent); color: #000; font-weight: bold;" onclick="saveTask()">Saqlash</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SUBJECTS = [
+        { id: 'algebra', name: 'Chiziqli algebra', total: 21 },
+        { id: 'db', name: "Ma'lumotlar bazasi", total: 15 },
+        { id: 'discrete', name: 'Diskret tuzilmalar', total: 15 },
+        { id: 'network', name: 'Kompyuter tarmoqlari', total: 15 },
+        { id: 'electronics', name: 'Elektronika va sxemalar 1', total: 15 }
+    ];
+
+    const DEADLINE = new Date('2027-01-16T23:59:59');
+    let progressData = JSON.parse(localStorage.getItem('tatu_elms_81')) || {};
+    let currentKey = null;
+
+    function getTodayStr() {
+        const d = new Date();
+        return d.toISOString().split('T')[0];
+    }
+
+    function formatDisplayDate(dateStr) {
+        if (!dateStr) return '';
+        const [y, m, d] = dateStr.split('-');
+        return `${d}.${m}.${y}`;
+    }
+
+    function render() {
+        const container = document.getElementById('subjectsContainer');
+        container.innerHTML = '';
+
+        let totalDone = 0;
+        const totalTasks = 81;
+        const logs = [];
+
+        SUBJECTS.forEach(sub => {
+            let subDone = 0;
+            let tasksHtml = '';
+
+            for (let i = 1; i <= sub.total; i++) {
+                const key = `${sub.id}_${i}`;
+                const item = progressData[key];
+                if (item && item.done) {
+                    subDone++;
+                    totalDone++;
+                    logs.push({
+                        subject: sub.name,
+                        num: i,
+                        date: item.date,
+                        note: item.note || ''
+                    });
+                }
+
+                tasksHtml += `
+                    <div class="task-btn ${item?.done ? 'done' : ''}" onclick="openModal('${key}', '${sub.name}', ${i})">
+                        ${item?.note ? '<span class="task-note-dot" title="Izoh bor"></span>' : ''}
+                        <span class="task-num">${i}-modul</span>
+                        <span class="task-date">${item?.done ? '✅ ' + formatDisplayDate(item.date) : 'Kutilmoqda'}</span>
+                    </div>
+                `;
+            }
+
+            container.innerHTML += `
+                <div class="subject-card">
+                    <div class="subject-header">
+                        <span class="subject-title">${sub.name}</span>
+                        <span class="subject-count">${subDone} / ${sub.total}</span>
+                    </div>
+                    <div class="tasks-grid">${tasksHtml}</div>
+                </div>
+            `;
+        });
+
+        // Statistika yangilash
+        const percent = Math.round((totalDone / totalTasks) * 100);
+        document.getElementById('completedCount').innerText = `${totalDone} / ${totalTasks}`;
+        document.getElementById('percentText').innerText = `${percent}%`;
+        document.getElementById('progressFill').style.width = `${percent}%`;
+
+        // Muddat hisobi
+        const now = new Date();
+        const diffTime = DEADLINE - now;
+        const daysLeft = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        const remainingTasks = totalTasks - totalDone;
+        const pace = (remainingTasks / daysLeft).toFixed(2);
+
+        document.getElementById('daysLeft').innerText = `${daysLeft} kun`;
+        document.getElementById('dailyPace').innerText = `${pace} ta/kun`;
+
+        // Tarix (Log) ni eng yangi sana bo'yicha saralash
+        logs.sort((a, b) => b.date.localeCompare(a.date));
+        const logContainer = document.getElementById('historyLog');
+        if (logs.length === 0) {
+            logContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">Hali vazifalar belgilanmagan.</p>';
+        } else {
+            logContainer.innerHTML = logs.map(l => `
+                <div class="log-item">
+                    <div class="log-date">📅 ${formatDisplayDate(l.date)}</div>
+                    <div class="log-sub">${l.subject} — ${l.num}-modul</div>
+                    ${l.note ? `<div class="log-note">"${l.note}"</div>` : ''}
+                </div>
+            `).join('');
+        }
+    }
+
+    function openModal(key, subName, num) {
+        currentKey = key;
+        const existing = progressData[key];
+        document.getElementById('modalTitle').innerText = `${subName} (${num}-modul)`;
+        document.getElementById('taskDateInput').value = existing?.date || getTodayStr();
+        document.getElementById('taskNoteInput').value = existing?.note || '';
+        document.getElementById('unmarkBtn').style.display = existing?.done ? 'inline-block' : 'none';
+        document.getElementById('taskModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('taskModal').style.display = 'none';
+    }
+
+    function saveTask() {
+        const dateVal = document.getElementById('taskDateInput').value || getTodayStr();
+        const noteVal = document.getElementById('taskNoteInput').value.trim();
+        progressData[currentKey] = { done: true, date: dateVal, note: noteVal };
+        localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
+        closeModal();
+        render();
+    }
+
+    function unmarkTask() {
+        delete progressData[currentKey];
+        localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
+        closeModal();
+        render();
+    }
+
+    function exportData() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(progressData, null, 2));
+        const a = document.createElement('a');
+        a.setAttribute("href", dataStr);
+        a.setAttribute("download", `tatu_elms_backup_${getTodayStr()}.json`);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+
+    function importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                progressData = JSON.parse(e.target.result);
+                localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
+                render();
+                alert("Ma'lumotlar muvaffaqiyatli tiklandi!");
+            } catch (err) {
+                alert("Fayl formati noto'g'ri!");
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function resetAll() {
+        if (confirm("Haqiqatan ham barcha belgilangan vazifalarni o'chirmoqchimisiz?")) {
+            progressData = {};
+            localStorage.removeItem('tatu_elms_81');
+            render();
+        }
+    }
+
+    render();
+</script>
+
+</body>
+</html>
