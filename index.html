@@ -8,7 +8,6 @@
         :root {
             --bg-dark: #0f172a;
             --card-bg: #1e293b;
-            --card-hover: #283548;
             --primary: #3b82f6;
             --accent: #10b981;
             --warning: #f59e0b;
@@ -34,20 +33,22 @@
             align-items: center;
             gap: 20px;
         }
-        .user-info h1 { font-size: 1.5rem; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .user-info h1 { font-size: 1.5rem; color: #fff; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .badge { background: var(--primary); font-size: 0.8rem; padding: 4px 10px; border-radius: 20px; }
-        .user-info p { color: var(--text-muted); font-size: 0.9rem; margin-top: 4px; }
+        .sync-badge { font-size: 0.78rem; padding: 4px 10px; border-radius: 20px; background: rgba(16, 185, 129, 0.15); color: var(--accent); border: 1px solid var(--accent); }
+        .sync-badge.loading { background: rgba(245, 158, 11, 0.15); color: var(--warning); border-color: var(--warning); }
+        .user-info p { color: var(--text-muted); font-size: 0.9rem; margin-top: 6px; }
 
-        .stats-box { display: flex; gap: 20px; flex-wrap: wrap; }
+        .stats-box { display: flex; gap: 15px; flex-wrap: wrap; }
         .stat-item {
             background: rgba(15, 23, 42, 0.6);
             border: 1px solid var(--border);
-            padding: 12px 20px;
+            padding: 12px 18px;
             border-radius: 12px;
             text-align: center;
-            min-width: 130px;
+            min-width: 120px;
         }
-        .stat-val { font-size: 1.4rem; font-weight: bold; color: var(--accent); }
+        .stat-val { font-size: 1.35rem; font-weight: bold; color: var(--accent); }
         .stat-val.warn { color: var(--warning); }
         .stat-label { font-size: 0.8rem; color: var(--text-muted); }
 
@@ -96,7 +97,7 @@
 
         .tasks-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
             gap: 10px;
         }
         .task-btn {
@@ -169,7 +170,11 @@
 <div class="container">
     <header>
         <div class="user-info">
-            <h1>TATU ELMS Tracker <span class="badge">M313-25DIo' | Variant №26</span></h1>
+            <h1>
+                TATU ELMS Tracker 
+                <span class="badge">M313-25DIo' | №26</span>
+                <span class="sync-badge loading" id="syncStatus">⏳ Bulutga ulanmoqda...</span>
+            </h1>
             <p>G'ofurov M. • Dasturiy injiniring (2-kurs) • Semestr muddati: 16.01.2027</p>
         </div>
         <div class="stats-box">
@@ -199,8 +204,9 @@
     </div>
 
     <div class="controls">
-        <button onclick="exportData()">📥 Zaxira nusxa yuklab olish (JSON)</button>
-        <button onclick="document.getElementById('importFile').click()">📤 Zaxira nusxani tiklash</button>
+        <button onclick="fetchFromFirebase()">🔄 Bulutdan yangilash</button>
+        <button onclick="exportData()">📥 JSON nusxa olish</button>
+        <button onclick="document.getElementById('importFile').click()">📤 JSON yuklash</button>
         <input type="file" id="importFile" style="display:none" accept=".json" onchange="importData(event)">
         <button class="danger" onclick="resetAll()">🗑️ Barchasini tozalash</button>
     </div>
@@ -211,7 +217,7 @@
         <div class="history-panel">
             <h2>📅 Bajarilgan vazifalar tarixi</h2>
             <div class="log-list" id="historyLog">
-                <p style="color: var(--text-muted); font-size: 0.9rem;">Hali vazifalar belgilanmagan.</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Ma'lumotlar yuklanmoqda...</p>
             </div>
         </div>
     </div>
@@ -238,6 +244,8 @@
 </div>
 
 <script>
+    const DB_URL = "https://elms-6f1c3-default-rtdb.firebaseio.com/tasks.json";
+
     const SUBJECTS = [
         { id: 'algebra', name: 'Chiziqli algebra', total: 21 },
         { id: 'db', name: "Ma'lumotlar bazasi", total: 15 },
@@ -250,15 +258,59 @@
     let progressData = JSON.parse(localStorage.getItem('tatu_elms_81')) || {};
     let currentKey = null;
 
+    function setSyncStatus(text, isLoading = false) {
+        const el = document.getElementById('syncStatus');
+        el.innerText = text;
+        el.className = isLoading ? 'sync-badge loading' : 'sync-badge';
+    }
+
     function getTodayStr() {
-        const d = new Date();
-        return d.toISOString().split('T')[0];
+        return new Date().toISOString().split('T')[0];
     }
 
     function formatDisplayDate(dateStr) {
         if (!dateStr) return '';
         const [y, m, d] = dateStr.split('-');
         return `${d}.${m}.${y}`;
+    }
+
+    // Bulutdan (Firebase) ma'lumotlarni olish
+    async function fetchFromFirebase() {
+        setSyncStatus("⏳ Yuklanmoqda...", true);
+        try {
+            const res = await fetch(DB_URL);
+            const data = await res.json();
+            if (data) {
+                progressData = data;
+                localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
+            } else if (Object.keys(progressData).length > 0) {
+                // Agar bulut bo'sh bo'lsa-yu, noutbukda eski ma'lumot bo'lsa, bulutga ko'chiradi
+                await syncToFirebase();
+            }
+            render();
+            setSyncStatus("✅ Bulut bilan sinxron");
+        } catch (err) {
+            console.error(err);
+            render();
+            setSyncStatus("⚠️ Oflayn rejim (Lokal)", true);
+        }
+    }
+
+    // Bulutga (Firebase) saqlash
+    async function syncToFirebase() {
+        localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
+        setSyncStatus("⏳ Saqlanmoqda...", true);
+        try {
+            await fetch(DB_URL, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(progressData)
+            });
+            setSyncStatus("✅ Bulut bilan sinxron");
+        } catch (err) {
+            console.error(err);
+            setSyncStatus("⚠️ Bulutga saqlanmadi (Oflayn)", true);
+        }
     }
 
     function render() {
@@ -307,13 +359,11 @@
             `;
         });
 
-        // Statistika yangilash
         const percent = Math.round((totalDone / totalTasks) * 100);
         document.getElementById('completedCount').innerText = `${totalDone} / ${totalTasks}`;
         document.getElementById('percentText').innerText = `${percent}%`;
         document.getElementById('progressFill').style.width = `${percent}%`;
 
-        // Muddat hisobi
         const now = new Date();
         const diffTime = DEADLINE - now;
         const daysLeft = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
@@ -323,7 +373,6 @@
         document.getElementById('daysLeft').innerText = `${daysLeft} kun`;
         document.getElementById('dailyPace').innerText = `${pace} ta/kun`;
 
-        // Tarix (Log) ni eng yangi sana bo'yicha saralash
         logs.sort((a, b) => b.date.localeCompare(a.date));
         const logContainer = document.getElementById('historyLog');
         if (logs.length === 0) {
@@ -353,20 +402,20 @@
         document.getElementById('taskModal').style.display = 'none';
     }
 
-    function saveTask() {
+    async function saveTask() {
         const dateVal = document.getElementById('taskDateInput').value || getTodayStr();
         const noteVal = document.getElementById('taskNoteInput').value.trim();
         progressData[currentKey] = { done: true, date: dateVal, note: noteVal };
-        localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
         closeModal();
         render();
+        await syncToFirebase();
     }
 
-    function unmarkTask() {
+    async function unmarkTask() {
         delete progressData[currentKey];
-        localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
         closeModal();
         render();
+        await syncToFirebase();
     }
 
     function exportData() {
@@ -383,12 +432,12 @@
         const file = event.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             try {
                 progressData = JSON.parse(e.target.result);
-                localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
                 render();
-                alert("Ma'lumotlar muvaffaqiyatli tiklandi!");
+                await syncToFirebase();
+                alert("Ma'lumotlar bulutga yuklandi va tiklandi!");
             } catch (err) {
                 alert("Fayl formati noto'g'ri!");
             }
@@ -396,15 +445,17 @@
         reader.readAsText(file);
     }
 
-    function resetAll() {
-        if (confirm("Haqiqatan ham barcha belgilangan vazifalarni o'chirmoqchimisiz?")) {
+    async function resetAll() {
+        if (confirm("Haqiqatan ham barcha belgilangan vazifalarni bulutdan ham o'chirmoqchimisiz?")) {
             progressData = {};
-            localStorage.removeItem('tatu_elms_81');
             render();
+            await syncToFirebase();
         }
     }
 
+    // Sahifa ochilganda bulutdan yuklash
     render();
+    fetchFromFirebase();
 </script>
 
 </body>
