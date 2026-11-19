@@ -20,6 +20,30 @@
         body { background-color: var(--bg-dark); color: var(--text-main); padding: 20px; line-height: 1.5; }
         .container { max-width: 1250px; margin: 0 auto; }
 
+        /* PIN Lock Screen */
+        .pin-overlay {
+            position: fixed; inset: 0; background: var(--bg-dark); z-index: 999;
+            display: flex; justify-content: center; align-items: center; padding: 20px;
+        }
+        .pin-box {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px;
+            padding: 32px; width: 100%; max-width: 380px; text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        .pin-box h2 { margin-bottom: 8px; font-size: 1.4rem; }
+        .pin-box p { color: var(--text-muted); font-size: 0.88rem; margin-bottom: 20px; }
+        .pin-input {
+            width: 100%; padding: 14px; font-size: 1.2rem; text-align: center; letter-spacing: 4px;
+            background: #0f172a; border: 1px solid var(--border); border-radius: 12px;
+            color: #fff; margin-bottom: 16px; outline: none;
+        }
+        .pin-input:focus { border-color: var(--primary); }
+        .pin-btn {
+            width: 100%; padding: 14px; background: var(--primary); color: #fff;
+            border: none; border-radius: 12px; font-size: 1rem; font-weight: bold; cursor: pointer;
+        }
+        .pin-btn:hover { opacity: 0.9; }
+
         /* Header */
         header {
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -66,7 +90,7 @@
 
         /* Controls */
         .controls { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
-        button {
+        button.ctrl-btn {
             background: var(--card-bg);
             color: var(--text-main);
             border: 1px solid var(--border);
@@ -76,8 +100,8 @@
             font-size: 0.9rem;
             transition: 0.2s;
         }
-        button:hover { background: var(--primary); border-color: var(--primary); }
-        button.danger:hover { background: #ef4444; border-color: #ef4444; }
+        button.ctrl-btn:hover { background: var(--primary); border-color: var(--primary); }
+        button.ctrl-btn.danger:hover { background: #ef4444; border-color: #ef4444; }
 
         /* Main Grid */
         .main-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
@@ -167,13 +191,23 @@
 </head>
 <body>
 
+<!-- PIN Lock Screen -->
+<div class="pin-overlay" id="pinOverlay">
+    <div class="pin-box">
+        <h2>🔒 Shaxsiy kabinet</h2>
+        <p>Ma'lumotlaringizni yuklash va sinxronlash uchun maxfiy PIN-kodni kiriting (noutbuk va telefonda bir xil PIN yozing):</p>
+        <input type="password" id="pinInput" class="pin-input" placeholder="••••••" onkeypress="if(event.key==='Enter') unlockWithPin()">
+        <button class="pin-btn" onclick="unlockWithPin()">Kirish</button>
+    </div>
+</div>
+
 <div class="container">
     <header>
         <div class="user-info">
             <h1>
                 TATU ELMS Tracker 
                 <span class="badge">M313-25DIo' | №26</span>
-                <span class="sync-badge loading" id="syncStatus">⏳ Bulutga ulanmoqda...</span>
+                <span class="sync-badge loading" id="syncStatus">⏳ Kutilmoqda...</span>
             </h1>
             <p>G'ofurov M. • Dasturiy injiniring (2-kurs) • Semestr muddati: 16.01.2027</p>
         </div>
@@ -204,11 +238,12 @@
     </div>
 
     <div class="controls">
-        <button onclick="fetchFromFirebase()">🔄 Bulutdan yangilash</button>
-        <button onclick="exportData()">📥 JSON nusxa olish</button>
-        <button onclick="document.getElementById('importFile').click()">📤 JSON yuklash</button>
+        <button class="ctrl-btn" onclick="fetchFromFirebase()">🔄 Bulutdan yangilash</button>
+        <button class="ctrl-btn" onclick="exportData()">📥 JSON nusxa olish</button>
+        <button class="ctrl-btn" onclick="document.getElementById('importFile').click()">📤 JSON yuklash</button>
         <input type="file" id="importFile" style="display:none" accept=".json" onchange="importData(event)">
-        <button class="danger" onclick="resetAll()">🗑️ Barchasini tozalash</button>
+        <button class="ctrl-btn" onclick="changePin()">🔑 PIN-kodni almashtirish</button>
+        <button class="ctrl-btn danger" onclick="resetAll()">🗑️ Barchasini tozalash</button>
     </div>
 
     <div class="main-grid">
@@ -236,15 +271,16 @@
             <textarea id="taskNoteInput" rows="3" placeholder="Qisqacha eslatma..."></textarea>
         </div>
         <div class="modal-actions">
-            <button class="danger" id="unmarkBtn" onclick="unmarkTask()">Bajarilmadi</button>
-            <button onclick="closeModal()">Bekor qilish</button>
-            <button style="background: var(--accent); border-color: var(--accent); color: #000; font-weight: bold;" onclick="saveTask()">Saqlash</button>
+            <button class="ctrl-btn danger" id="unmarkBtn" onclick="unmarkTask()">Bajarilmadi</button>
+            <button class="ctrl-btn" onclick="closeModal()">Bekor qilish</button>
+            <button class="ctrl-btn" style="background: var(--accent); border-color: var(--accent); color: #000; font-weight: bold;" onclick="saveTask()">Saqlash</button>
         </div>
     </div>
 </div>
 
 <script>
-    const DB_URL = "https://elms-6f1c3-default-rtdb.firebaseio.com/23042025m/tasks.json";
+    const BASE_DB_URL = "https://elms-6f1c3-default-rtdb.firebaseio.com/users";
+    let secretHash = localStorage.getItem('tatu_elms_pin_hash') || null;
 
     const SUBJECTS = [
         { id: 'algebra', name: 'Chiziqli algebra', total: 21 },
@@ -257,6 +293,37 @@
     const DEADLINE = new Date('2027-01-16T23:59:59');
     let progressData = JSON.parse(localStorage.getItem('tatu_elms_81')) || {};
     let currentKey = null;
+
+    // PIN-kodni SHA-256 orqali xeshlash
+    async function sha256(message) {
+        const msgBuffer = new TextEncoder().encode("tatu_salt_" + message);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function unlockWithPin() {
+        const pin = document.getElementById('pinInput').value.trim();
+        if (pin.length < 4) {
+            alert("Kamida 4 ta belgidan iborat PIN-kod kiriting!");
+            return;
+        }
+        secretHash = await sha256(pin);
+        localStorage.setItem('tatu_elms_pin_hash', secretHash);
+        document.getElementById('pinOverlay').style.display = 'none';
+        fetchFromFirebase();
+    }
+
+    function changePin() {
+        localStorage.removeItem('tatu_elms_pin_hash');
+        secretHash = null;
+        document.getElementById('pinInput').value = '';
+        document.getElementById('pinOverlay').style.display = 'flex';
+    }
+
+    function getDbUrl() {
+        return `${BASE_DB_URL}/${secretHash}/tasks.json`;
+    }
 
     function setSyncStatus(text, isLoading = false) {
         const el = document.getElementById('syncStatus');
@@ -274,42 +341,43 @@
         return `${d}.${m}.${y}`;
     }
 
-    // Bulutdan (Firebase) ma'lumotlarni olish
     async function fetchFromFirebase() {
+        if (!secretHash) return;
         setSyncStatus("⏳ Yuklanmoqda...", true);
         try {
-            const res = await fetch(DB_URL);
+            const res = await fetch(getDbUrl());
+            if (!res.ok) throw new Error("Ruxsat xatosi");
             const data = await res.json();
             if (data) {
                 progressData = data;
                 localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
             } else if (Object.keys(progressData).length > 0) {
-                // Agar bulut bo'sh bo'lsa-yu, noutbukda eski ma'lumot bo'lsa, bulutga ko'chiradi
                 await syncToFirebase();
             }
             render();
-            setSyncStatus("✅ Bulut bilan sinxron");
+            setSyncStatus("✅ Himoyalangan & Sinxron");
         } catch (err) {
             console.error(err);
             render();
-            setSyncStatus("⚠️ Oflayn rejim (Lokal)", true);
+            setSyncStatus("⚠️ Oflayn rejim", true);
         }
     }
 
-    // Bulutga (Firebase) saqlash
     async function syncToFirebase() {
+        if (!secretHash) return;
         localStorage.setItem('tatu_elms_81', JSON.stringify(progressData));
         setSyncStatus("⏳ Saqlanmoqda...", true);
         try {
-            await fetch(DB_URL, {
+            const res = await fetch(getDbUrl(), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(progressData)
             });
-            setSyncStatus("✅ Bulut bilan sinxron");
+            if (!res.ok) throw new Error("Saqlash xatosi");
+            setSyncStatus("✅ Himoyalangan & Sinxron");
         } catch (err) {
             console.error(err);
-            setSyncStatus("⚠️ Bulutga saqlanmadi (Oflayn)", true);
+            setSyncStatus("⚠️ Bulutga saqlanmadi", true);
         }
     }
 
@@ -446,16 +514,19 @@
     }
 
     async function resetAll() {
-        if (confirm("Haqiqatan ham barcha belgilangan vazifalarni bulutdan ham o'chirmoqchimisiz?")) {
+        if (confirm("Haqiqatan ham barcha belgilangan vazifalarni o'chirmoqchimisiz?")) {
             progressData = {};
             render();
             await syncToFirebase();
         }
     }
 
-    // Sahifa ochilganda bulutdan yuklash
+    // Dastlabki tekshiruv
     render();
-    fetchFromFirebase();
+    if (secretHash) {
+        document.getElementById('pinOverlay').style.display = 'none';
+        fetchFromFirebase();
+    }
 </script>
 
 </body>
